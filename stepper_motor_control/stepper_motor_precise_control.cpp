@@ -61,7 +61,7 @@ void loop() {
 
             // Calculate the number of steps required
             stepsToMove = round(dropLength / metersPerStep);
-            Serial.print("Steps: ");
+            Serial.print("Steps from zero: ");
             Serial.println(stepsToMove);
             
 
