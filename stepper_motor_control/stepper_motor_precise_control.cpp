@@ -3,17 +3,20 @@
 // Pin Definitions
 const int stepPin = 3; // Connect to STEP pin on DM542T
 const int dirPin = 4;  // Connect to DIR pin on DM542T
-const int enablePin = 2; // Connect to ENABLE pin on DM542T (optional)
 
 // Constants
 const float spoolRadius = 0.091; // Spool radius in meters
 const int stepsPerRevolution = 200; // Steps per revolution (adjust for microstepping)
 const float pi = 3.14159; // Pi value
-const int microstepping = 16; // Microstepping value (e.g., 16x)
+const int speed = 250;
 
 // Derived Values
 const float circumference = 2 * pi * spoolRadius; // Circumference of spool
-const float stepsPerMeter = (stepsPerRevolution * microstepping) / circumference;
+const float metersPerStep = (1.8 * (pi/180)) * spoolRadius; // ArcLength = theta(radians) * radius
+
+// Variables
+int stepsToMove = 0.0;
+int lastStepsToMove = 0.0;
 
 String inputString = ""; // String to store user input
 bool inputComplete = false;
@@ -27,10 +30,6 @@ void setup() {
     // Configure Pins
     pinMode(stepPin, OUTPUT);
     pinMode(dirPin, OUTPUT);
-    pinMode(enablePin, OUTPUT);
-
-    // Enable the stepper driver
-    digitalWrite(enablePin, LOW); // LOW to enable, HIGH to disable
 }
 
 void loop() {
@@ -58,22 +57,26 @@ void loop() {
             Serial.print("Dropping ");
             Serial.print(dropLength);
             Serial.println(" meters of line...");
+            
 
             // Calculate the number of steps required
-            int stepsToMove = round(dropLength * stepsPerMeter);
+            stepsToMove = round(dropLength / metersPerStep);
+            lastStepsToMove = stepsToMove;
+            Serial.print("Steps: ");
+            Serial.println(stepsToMove);
+            
 
-            // Set Direction (Assume one direction for dropping line)
-            digitalWrite(dirPin, LOW); // LOW for dropping, HIGH for retracting
-
-            // Move the stepper motor
-            for (int i = 0; i < stepsToMove; i++) {
-                digitalWrite(stepPin, HIGH);
-                delayMicroseconds(100); // Adjust speed (shorter delay = faster)
-                digitalWrite(stepPin, LOW);
-                delayMicroseconds(100);
+            if (stepsToMove > 0) {
+                digitalWrite(dirPin, LOW); // Direction
+                for (int i = 0; i < stepsToMove; i++) {
+                    digitalWrite(stepPin, HIGH);
+                    delayMicroseconds(speed); // Adjust speed (shorter delay = faster)
+                    digitalWrite(stepPin, LOW);
+                    delayMicroseconds(speed);
+                }
+                Serial.println("Line dropped.");
             }
-
-            Serial.println("Line dropped.");
+            
         } else {
             Serial.println("\nInvalid input. Enter a positive value.");
         }
