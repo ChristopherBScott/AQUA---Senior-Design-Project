@@ -15,8 +15,8 @@ const float circumference = 2 * pi * spoolRadius; // Circumference of spool
 const float metersPerStep = (1.8 * (pi/180)) * spoolRadius; // ArcLength = theta(radians) * radius
 
 // Variables
-int stepsToMove = 0.0;
-int lastStepsToMove = 0.0;
+int stepsToMove = 0;
+int lastStepsToMove = 0;
 
 String inputString = ""; // String to store user input
 bool inputComplete = false;
@@ -61,12 +61,14 @@ void loop() {
 
             // Calculate the number of steps required
             stepsToMove = round(dropLength / metersPerStep);
-            lastStepsToMove = stepsToMove;
             Serial.print("Steps: ");
             Serial.println(stepsToMove);
             
 
-            if (stepsToMove > 0) {
+            if (stepsToMove > lastStepsToMove) {
+                
+                stepsToMove = stepsToMove - lastStepsToMove;
+                
                 digitalWrite(dirPin, LOW); // Direction
                 for (int i = 0; i < stepsToMove; i++) {
                     digitalWrite(stepPin, HIGH);
@@ -74,7 +76,22 @@ void loop() {
                     digitalWrite(stepPin, LOW);
                     delayMicroseconds(speed);
                 }
-                Serial.println("Line dropped.");
+                lastStepsToMove = stepsToMove;
+                stepsToMove = 0;
+                Serial.println("Line length changed.");
+            }
+            elif (stepsToMove < lastStepsToMove) {
+                stepsToMove = lastStepsToMove - stepsToMove;
+                digitalWrite(dirPin, HIGH);  // Direction
+                for (int i = 0; i < stepsToMove; i++) {
+                    digitalWrite(stepPin, HIGH);
+                    delayMicroseconds(speed); // Adjust speed (shorter delay = faster)
+                    digitalWrite(stepPin, LOW);
+                    delayMicroseconds(speed);
+                }
+                lastStepsToMove = stepsToMove;
+                stepsToMove = 0;
+                Serial.println("Line length changed");
             }
             
         } else {
