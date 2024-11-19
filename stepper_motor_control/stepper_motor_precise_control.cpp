@@ -52,7 +52,7 @@ void loop() {
         inputString = "";
         inputComplete = false;
 
-        if (dropLength > 0) {
+        if (dropLength >= 0) {
             Serial.println(); // Move to the next line
             Serial.print("Dropping ");
             Serial.print(dropLength);
@@ -95,7 +95,7 @@ void loop() {
             }
             
         } else {
-            Serial.println("\nInvalid input. Enter a positive value.");
+            Serial.println("\nInvalid input.");
         }
 
         Serial.println("Enter length to drop in meters (e.g., 1.2):");
