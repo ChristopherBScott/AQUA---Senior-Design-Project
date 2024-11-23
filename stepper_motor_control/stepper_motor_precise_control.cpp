@@ -8,7 +8,7 @@ const int dirPin = 4;  // Connect to DIR pin on DM542T
 const float spoolRadius = 0.091; // Spool radius in meters
 const int stepsPerRevolution = 200; // Steps per revolution (adjust for microstepping)
 const float pi = 3.14159; // Pi value
-const int speed = 250;
+const int speed = 3000;
 
 // Derived Values
 const float circumference = 2 * pi * spoolRadius; // Circumference of spool
@@ -64,13 +64,14 @@ void loop() {
             Serial.print("Steps from zero: ");
             Serial.println(stepsToMove);
             
-
+            // Move reel DOWN
             if (stepsToMove > lastStepsToMove) {
-                
                 stepsToMove = stepsToMove - lastStepsToMove;
-                
+                Serial.print("Steps b4 moving DOWN: ");
+                Serial.println(stepsToMove);
                 digitalWrite(dirPin, LOW); // Direction
                 for (int i = 0; i < stepsToMove; i++) {
+                    Serial.print("DOWN");
                     digitalWrite(stepPin, HIGH);
                     delayMicroseconds(speed); // Adjust speed (shorter delay = faster)
                     digitalWrite(stepPin, LOW);
@@ -78,12 +79,15 @@ void loop() {
                 }
                 lastStepsToMove = stepsToMove;
                 stepsToMove = 0;
-                Serial.println("Line length changed.");
             }
-            elif (stepsToMove < lastStepsToMove) {
+            // Move reel DOWN
+            else if (stepsToMove < lastStepsToMove) {
                 stepsToMove = lastStepsToMove - stepsToMove;
+                Serial.print("Steps b4 moving UP: ");
+                Serial.println(stepsToMove);
                 digitalWrite(dirPin, HIGH);  // Direction
                 for (int i = 0; i < stepsToMove; i++) {
+                    Serial.print("UP");
                     digitalWrite(stepPin, HIGH);
                     delayMicroseconds(speed); // Adjust speed (shorter delay = faster)
                     digitalWrite(stepPin, LOW);
@@ -91,7 +95,6 @@ void loop() {
                 }
                 lastStepsToMove = stepsToMove;
                 stepsToMove = 0;
-                Serial.println("Line length changed");
             }
             
         } else {
