@@ -17,6 +17,7 @@ const float metersPerStep = (1.8 * (pi/180)) * spoolRadius; // ArcLength = theta
 // Variables
 int stepsToMove = 0;
 int lastStepsToMove = 0;
+int stepsFromZero = 0;
 
 String inputString = ""; // String to store user input
 bool inputComplete = false;
@@ -60,40 +61,43 @@ void loop() {
             
 
             // Calculate the number of steps required
-            stepsToMove = round(dropLength / metersPerStep);
-            Serial.print("Steps from zero: ");
-            Serial.println(stepsToMove);
+            stepsFromZero = round(dropLength / metersPerStep);
+            Serial.print("StepsFromZero: ");
+            Serial.println(stepsFromZero);
+            
+            Serial.print("lastStepsToMove: ");
+            Serial.println(lastStepsToMove);
             
             // Move reel DOWN
-            if (stepsToMove > lastStepsToMove) {
-                stepsToMove = stepsToMove - lastStepsToMove;
-                Serial.print("Steps b4 moving DOWN: ");
+            if (stepsFromZero > lastStepsToMove) {
+                stepsToMove = stepsFromZero - lastStepsToMove;
+                Serial.print("Steps moving DOWN: ");
                 Serial.println(stepsToMove);
                 digitalWrite(dirPin, LOW); // Direction
                 for (int i = 0; i < stepsToMove; i++) {
-                    Serial.print("DOWN");
+                    //Serial.print("DOWN");
                     digitalWrite(stepPin, HIGH);
                     delayMicroseconds(speed); // Adjust speed (shorter delay = faster)
                     digitalWrite(stepPin, LOW);
                     delayMicroseconds(speed);
                 }
-                lastStepsToMove = stepsToMove;
+                lastStepsToMove = stepsFromZero;
                 stepsToMove = 0;
             }
-            // Move reel DOWN
-            else if (stepsToMove < lastStepsToMove) {
-                stepsToMove = lastStepsToMove - stepsToMove;
-                Serial.print("Steps b4 moving UP: ");
+            // Move reel UP
+            else if (stepsFromZero < lastStepsToMove) {
+                stepsToMove = lastStepsToMove - stepsFromZero;
+                Serial.print("Steps moving UP: ");
                 Serial.println(stepsToMove);
                 digitalWrite(dirPin, HIGH);  // Direction
                 for (int i = 0; i < stepsToMove; i++) {
-                    Serial.print("UP");
+                    //Serial.print("UP");
                     digitalWrite(stepPin, HIGH);
                     delayMicroseconds(speed); // Adjust speed (shorter delay = faster)
                     digitalWrite(stepPin, LOW);
                     delayMicroseconds(speed);
                 }
-                lastStepsToMove = stepsToMove;
+                lastStepsToMove = stepsFromZero;
                 stepsToMove = 0;
             }
             
