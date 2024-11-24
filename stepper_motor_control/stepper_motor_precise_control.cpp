@@ -5,9 +5,9 @@ const int stepPin = 3; // Connect to STEP pin on DM542T
 const int dirPin = 4;  // Connect to DIR pin on DM542T
 
 // Constants
-const float spoolRadius = 0.091; // Spool radius in meters
+const float spoolRadius = 0.091 / 2; // Spool radius in meters
 const int stepsPerRevolution = 200; // Steps per revolution (adjust for microstepping)
-const float pi = 3.14159; // Pi value
+const float pi = 3.14159265; // Pi value
 const int speed = 3000;
 
 // Derived Values
@@ -73,7 +73,7 @@ void loop() {
                 stepsToMove = stepsFromZero - lastStepsToMove;
                 Serial.print("Steps moving DOWN: ");
                 Serial.println(stepsToMove);
-                digitalWrite(dirPin, LOW); // Direction
+                digitalWrite(dirPin, HIGH); // Direction
                 for (int i = 0; i < stepsToMove; i++) {
                     //Serial.print("DOWN");
                     digitalWrite(stepPin, HIGH);
@@ -89,7 +89,7 @@ void loop() {
                 stepsToMove = lastStepsToMove - stepsFromZero;
                 Serial.print("Steps moving UP: ");
                 Serial.println(stepsToMove);
-                digitalWrite(dirPin, HIGH);  // Direction
+                digitalWrite(dirPin, LOW);  // Direction
                 for (int i = 0; i < stepsToMove; i++) {
                     //Serial.print("UP");
                     digitalWrite(stepPin, HIGH);
