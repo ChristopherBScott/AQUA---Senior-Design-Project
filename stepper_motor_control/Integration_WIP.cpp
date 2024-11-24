@@ -1,13 +1,16 @@
+// Title: AQUA prototype full code
+// Description: This code allows the user to enter a number in meters and sets the length of the 
+//              cable down to that length or up to a desired length and constantly takes temperature
+//              readings 
+
+
 #include <Arduino.h>
 
-// Include the required Arduino libraries:                                                            //ADDED LINE
-#include "OneWire.h"                                                                                  //ADDED LINE
-#include "DallasTemperature.h"                                                                        //ADDED LINE
+// Include the required Arduino libraries for temerature readings: 
+#include "OneWire.h"                                     
+#include "DallasTemperature.h"   
 
-// Pin Definitions
-const int stepPin = 3; // Connect to STEP pin on DM542T
-const int dirPin = 4;  // Connect to DIR pin on DM542T
-
+//----------- Temp sensor variables,constants,fucntions,etc.------------//
 // Define to which pin of the Arduino the 1-Wire bus is connected:                                    //ADDED LINE
 #define ONE_WIRE_BUS 2                                                                                //ADDED LINE
 
@@ -17,11 +20,22 @@ OneWire oneWire(ONE_WIRE_BUS);                                                  
 // Pass the oneWire reference to DallasTemperature library:                                           //ADDED LINE
 DallasTemperature sensors(&oneWire);                                                                  //ADDED LINE
 
+unsigned long previousMillis = 0; // To store last time temperature was read                               //ADDED LINE
+const long interval = 2000; // Interval to read temperature (2 seconds)                                    //ADDED LINE
+//-----------------------------------------------------------------------//
+
+
+
+//----------- Motor variables,constants,functions,etc.------------------//
+// Pin Definitions
+const int stepPin = 3; // Connect to STEP pin on DM542T
+const int dirPin = 4;  // Connect to DIR pin on DM542T
+
 // Constants
-const float spoolRadius = 0.091; // Spool radius in meters
+const float spoolRadius = 0.091 / 2; // Spool radius in meters
 const int stepsPerRevolution = 200; // Steps per revolution (adjust for microstepping)
 const float pi = 3.14159; // Pi value
-const int speed = 250;
+const int speed = 3000;
 
 // Derived Values
 const float circumference = 2 * pi * spoolRadius; // Circumference of spool
@@ -30,28 +44,25 @@ const float metersPerStep = (1.8 * (pi/180)) * spoolRadius; // ArcLength = theta
 // Variables
 int stepsToMove = 0;
 int lastStepsToMove = 0;
+int stepsFromZero = 0;
 
 String inputString = ""; // String to store user input
 bool inputComplete = false;
-
-unsigned long previousMillis = 0; // To store last time temperature was read                               //ADDED LINE
-const long interval = 2000; // Interval to read temperature (2 seconds)                                    //ADDED LINE
+//---------------------------------------------------------------//
 
 void setup() {
     // Initialize Serial Communication
     Serial.begin(9600);
-
-    // Start up the library:                                                                               //ADDED LINE
-    sensors.begin();                                                                                       //ADDED LINE
-    //sensors.setResolution(9); // sets resolution of readings to 9 bit, up to 12 for more precision       //ADDED LINE
-
-
     Serial.println("Stepper Motor Line Control Initialized");
     Serial.println("Enter length to drop in meters (e.g., 1.2):");
 
     // Configure Pins
     pinMode(stepPin, OUTPUT);
     pinMode(dirPin, OUTPUT);
+
+     // Start up the library:                                                                               
+    sensors.begin();                                                                                      
+    //sensors.setResolution(9); // sets resolution of readings to 9 bit, up to 12 for more precision 
 }
 
 void loop() {
@@ -82,38 +93,44 @@ void loop() {
             
 
             // Calculate the number of steps required
-            stepsToMove = round(dropLength / metersPerStep);
-            Serial.print("Steps from zero: ");
-            Serial.println(stepsToMove);
+            stepsFromZero = round(dropLength / metersPerStep);
+            Serial.print("StepsFromZero: ");
+            Serial.println(stepsFromZero);
             
-
-            if (stepsToMove > lastStepsToMove) {
-                
-                stepsToMove = stepsToMove - lastStepsToMove;
-                
-                digitalWrite(dirPin, LOW); // Direction
+            Serial.print("lastStepsToMove: ");
+            Serial.println(lastStepsToMove);
+            
+            // Move reel DOWN
+            if (stepsFromZero > lastStepsToMove) {
+                stepsToMove = stepsFromZero - lastStepsToMove;
+                Serial.print("Steps moving DOWN: ");
+                Serial.println(stepsToMove);
+                digitalWrite(dirPin, HIGH); // Direction
                 for (int i = 0; i < stepsToMove; i++) {
+                    //Serial.print("DOWN");
                     digitalWrite(stepPin, HIGH);
                     delayMicroseconds(speed); // Adjust speed (shorter delay = faster)
                     digitalWrite(stepPin, LOW);
                     delayMicroseconds(speed);
                 }
-                lastStepsToMove = stepsToMove;
+                lastStepsToMove = stepsFromZero;
                 stepsToMove = 0;
-                Serial.println("Line length changed.");
             }
-            elif (stepsToMove < lastStepsToMove) {
-                stepsToMove = lastStepsToMove - stepsToMove;
-                digitalWrite(dirPin, HIGH);  // Direction
+            // Move reel UP
+            else if (stepsFromZero < lastStepsToMove) {
+                stepsToMove = lastStepsToMove - stepsFromZero;
+                Serial.print("Steps moving UP: ");
+                Serial.println(stepsToMove);
+                digitalWrite(dirPin, LOW);  // Direction
                 for (int i = 0; i < stepsToMove; i++) {
+                    //Serial.print("UP");
                     digitalWrite(stepPin, HIGH);
                     delayMicroseconds(speed); // Adjust speed (shorter delay = faster)
                     digitalWrite(stepPin, LOW);
                     delayMicroseconds(speed);
                 }
-                lastStepsToMove = stepsToMove;
+                lastStepsToMove = stepsFromZero;
                 stepsToMove = 0;
-                Serial.println("Line length changed");
             }
             
         } else {
