@@ -45,6 +45,7 @@ const float metersPerStep = (1.8 * (pi/180)) * spoolRadius; // ArcLength = theta
 int stepsToMove = 0;
 int lastStepsToMove = 0;
 int stepsFromZero = 0;
+int filtempC = 0;
 
 String inputString = ""; // String to store user input
 bool inputComplete = false;
@@ -141,19 +142,22 @@ void loop() {
     }
 
     // Handle temperature readings every 2 seconds                                    
-    unsigned long currentMillis = millis();                                           
-    if (currentMillis - previousMillis >= interval) {                                 
-        // Save the last time temperature was read                                    
-        previousMillis = currentMillis;                                               
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= interval) { 
+        // Save the last time temperature was read
+        previousMillis = currentMillis;
 
-        // Request temperature readings from all sensors                             
-        sensors.requestTemperatures();                                              
+        // Request temperature readings from all sensors
+        sensors.requestTemperatures();
 
-        // Print temperature                                                        
-        float tempC = sensors.getTempCByIndex(0);                                   
-        Serial.print("Temperature: ");                                           
-        Serial.print(tempC);                                                      
-        Serial.print(" \xC2\xB0"); // shows degree symbol                        
-        Serial.println("C");                                          
+        // filter values and Print temperature
+        float tempC = sensors.getTempCByIndex(0);
+        if (tempC > -100){
+            Serial.print("Temperature: ");
+            Serial.print(tempC);
+            Serial.print(" \xC2\xB0"); // shows degree symbol
+            Serial.println("C");
+            delay(100);
+        } 
     }
 }
