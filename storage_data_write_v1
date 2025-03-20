@@ -1,0 +1,55 @@
+#include <Arduino.h>
+#include <SPI.h>
+#include <SD.h>
+
+/*
+Connections:
+VCC → 5Vs
+GND → GND
+MISO → 50
+MOSI → 51
+SCK → 52
+CS → 53 (default, but can be changed)
+*/
+
+const int chipSelect = 53; // CS pin for Arduino Mega
+File myFile;
+
+void setup() {
+    Serial.begin(9600);
+    while (!Serial) {
+        ; // Wait for Serial Monitor to open (for native USB boards)
+    }
+
+    Serial.println("Initializing SD card...");
+    
+    if (!SD.begin(chipSelect)) {
+        Serial.println("SD card initialization failed!");
+        return;
+    }
+    
+    Serial.println("SD card ready. Enter text to save:");
+}
+
+void loop() {
+    if (Serial.available()) { // Check if user has entered data
+        String userInput = Serial.readStringUntil('\n'); // Read input until newline
+        userInput.trim(); // Remove any trailing newline or spaces
+        
+        if (userInput.length() > 0) {
+            Serial.println("Writing to SD card: " + userInput);
+            
+            myFile = SD.open("log.txt", FILE_WRITE); // Open file in append mode
+            
+            if (myFile) {
+                myFile.println(userInput);
+                myFile.close();
+                Serial.println("Data saved successfully!");
+            } else {
+                Serial.println("Error opening file!");
+            }
+        } else {
+            Serial.println("No valid input received.");
+        }
+    }
+}
