@@ -1,0 +1,51 @@
+#include <Arduino.h>
+
+#include <Wire.h>
+#include <SparkFun_u-blox_GNSS_Arduino_Library.h>
+
+SFE_UBLOX_GNSS myGNSS;
+
+/*
+
+ZED-F9P SDA → Mega SDA (Pin 20)
+ZED-F9P SCL → Mega SCL (Pin 21)
+ZED-F9P GND → Mega GND
+ZED-F9P VCC (3.3V) → Mega 3.3V
+
+Qwiic cable guide:
+black for GND, red for 3.3V, blue for SDA, yellow for SCL.
+
+*/
+
+void setup() {
+    Serial.begin(9600);   // USB Serial
+    Serial1.begin(115200);  // Hardware Serial (optional for debugging)
+    Wire.begin();           // Start I2C
+
+    if (!myGNSS.begin()) {
+        Serial.println("ZED-F9P not detected. Check connections.");
+        while (1);  // Stop here if no GPS detected
+    }
+
+    Serial.println("ZED-F9P connected!");
+    myGNSS.setI2COutput(COM_TYPE_UBX);  // Ensure we are using UBX protocol
+    myGNSS.setNavigationFrequency(1);   // Set update rate (1Hz)
+}
+
+void loop() {
+    if (myGNSS.getGnssFixOk()) {
+        // Read latitude, longitude, and altitude
+        float latitude = myGNSS.getLatitude() / 1e7;  // Convert to decimal degrees
+        float longitude = myGNSS.getLongitude() / 1e7;
+        float altitude = myGNSS.getAltitude() / 1000.0;  // Convert to meters
+
+        Serial.print("Lat: "); Serial.print(latitude, 6);
+        Serial.print(" Lon: "); Serial.print(longitude, 6);
+        Serial.print(" Alt: "); Serial.print(altitude, 2);
+        Serial.println(" m");
+    } else {
+        Serial.println("No GPS fix.");
+    }
+
+    delay(1000);  // Update every second
+}
