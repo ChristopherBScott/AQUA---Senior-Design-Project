@@ -1,0 +1,337 @@
+/*
+// Title: AQUA Boat Project Full code
+// Author: Cameron deLeeuw, Chris Scott
+// Notes: 
+      V2: All sensors except for ultrasonic are connected directly to TrinketM0 microcontroller
+          Trinket is acting as a data hub in which data will be transfered to the Mega on surface vessel
+        Trinket Sensors:
+        MS5837 PRESSURE sensor voltage: 3 V - 5 V
+          - Purple, 5 V
+          - Gray, GND
+          - I2C SCL :: Digital #2 (PA09 / A1) :: White
+          - I2C SDA :: Digital #0 (PA08 / A2) :: Black
+         OXYGEN sensor voltage: 
+            - 5 V
+            - GND
+            - Analog out :: Digital #1 (PA02 / A0)
+        DS18B20 TEMPERATURE sensor voltage: 3 V - 5 V
+          - Yellow :: Digital #3 (PA07 / A3)
+
+        Mega Sensors:
+        ULTRASONIC sensor voltage: 5 V - 24 V
+          - white, pin 19 on mega
+          - yellow, pin 18 on mega
+        Trinket on Serial1:
+            - Digital #4 (PA06 / A4) - Bit-banged UART TX to Mega RX1
+        GPS 
+            - I2C connector
+                - 3.3 V
+                - GND
+                - yellow, SCL :: Pin 21
+                - Blue, SDA :: Pin 20
+        SD card
+            - CS, black :: Pin 53
+            - SCK, white :: Pin 52
+            - MOSI, gray :: Pin 51
+            - MISO, purple :: Pin 50
+            - VCC, blue :: 5V
+            - GND, green :: GND
+*/
+
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <SD.h>
+#include <SparkFun_u-blox_GNSS_Arduino_Library.h>
+
+#define ULTRASONIC_COM 0x55
+#define TRINKET_SERIAL Serial1
+#define ULTRASONIC_SERIAL Serial2
+
+const int motorDirPin = 9;
+const int motorPWMPin = 10;
+const float targetDepth = 1.0;
+const float slowDownMargin = 0.1;
+const int fullSpeedPWM = 255;
+const int slowSpeedPWM = 100;
+
+bool waypointReached = false;
+bool moduleDeployed = false;
+bool surfaceReached = false;
+unsigned long deployStartTime = 0;
+const unsigned long waitTime = 90000;
+
+#define SD_CS 53
+
+float oxygen = 0;
+float temperature = 0;
+float pressure = 0;
+float depth = 0;
+float distance = 0;
+float gpsSpeed = 0.0;
+
+SFE_UBLOX_GNSS gps;
+bool fixOK = false;
+double latitude = 0, longitude = 0;
+float altitude = 0;
+uint8_t fixType = 0, rtkStatus = 0;
+uint16_t year; uint8_t month, day, hour, minute, second;
+
+const float vRef = 5.0;
+const float V0 = 0.013;
+const float V100 = 0.685;
+const float calibTempC = 15.4;
+
+File gpsLogFile;
+File sensorLogFile;
+
+unsigned long lastGpsLog = 0;
+unsigned long lowSpeedStartTime = 0;
+const float speedThreshold = 0.1;
+const float movementTrigger = 0.5;
+const unsigned long dwellTime = 7000;
+bool hasBeenMoving = false;
+
+void readTrinketPacket();
+void updateUltrasonic();
+void reelOperation();
+void logGPSData();
+void logSensorData();
+void gpsUpdate();
+
+// ========== MAIN SETUP ========== //
+void setup() {
+  Serial.begin(115200);
+  TRINKET_SERIAL.begin(9600);
+  ULTRASONIC_SERIAL.begin(115200);
+
+  pinMode(motorDirPin, OUTPUT);
+  pinMode(motorPWMPin, OUTPUT);
+  digitalWrite(motorDirPin, HIGH);
+
+  Wire.begin();
+
+  if (!gps.begin()) {
+    Serial.println("ZED-F9P not detected. Check connections.");
+    pinMode(13, OUTPUT);
+    while (1) {
+      digitalWrite(13, HIGH); delay(300);
+      digitalWrite(13, LOW); delay(300);
+    }
+  }
+  gps.setI2COutput(COM_TYPE_UBX);
+  gps.setNavigationFrequency(1);
+
+  if (!SD.begin(SD_CS)) Serial.println("SD initialization failed!");
+
+  gpsLogFile = SD.open("gps_log.txt", FILE_WRITE);
+  if (gpsLogFile) {
+    gpsLogFile.println("Lat, Lon, Alt, Fix Type, RTK Status, Speed, Time, Date");
+    gpsLogFile.close();
+  } else {
+    Serial.println("Error opening gps_log.txt");
+  }
+
+  Serial.println("AQUA Boat System Ready");
+}
+
+// ========== MAIN LOOP ========== //
+void loop() {
+  gpsUpdate();
+  updateUltrasonic();
+  readTrinketPacket();
+  reelOperation();
+
+  if (millis() - lastGpsLog >= 1000) { //log every second
+    lastGpsLog = millis();
+    logGPSData();
+    logSensorData();
+  }
+
+  if (fixOK && !waypointReached) {
+    float speed = gpsSpeed;
+
+    if (speed > movementTrigger) {
+      hasBeenMoving = true;
+    }
+
+    if (speed < speedThreshold && hasBeenMoving) {
+      if (lowSpeedStartTime == 0) {
+        lowSpeedStartTime = millis();
+      } else if (millis() - lowSpeedStartTime >= dwellTime) {
+        waypointReached = true;
+        moduleDeployed = false;
+        hasBeenMoving = false;
+      }
+    } else {
+      lowSpeedStartTime = 0;
+    }
+  }
+
+  if (waypointReached && !moduleDeployed && depth >= targetDepth) {
+    deployStartTime = millis();
+    moduleDeployed = true;
+  }
+
+  if (moduleDeployed && millis() - deployStartTime >= waitTime) {
+    logSensorData();
+    analogWrite(motorPWMPin, 0);
+    surfaceReached = true;
+    waypointReached = false;
+    hasBeenMoving = false;
+    deployStartTime = 0;
+  }
+}
+
+
+// ========== MAIN FUNCTIONS ========== //
+void gpsUpdate() {
+  // Grab location, altitude, speed, etc. from gps
+  fixOK = gps.getGnssFixOk();
+  if (fixOK) {
+    latitude = gps.getLatitude() / 1e7;
+    longitude = gps.getLongitude() / 1e7;
+    altitude = gps.getAltitude() / 1000.0;
+    fixType = gps.getFixType();
+    rtkStatus = gps.getCarrierSolutionType();
+    gpsSpeed = gps.getGroundSpeed() / 1000.0;
+
+    year = gps.getYear();
+    month = gps.getMonth();
+    day = gps.getDay();
+    hour = gps.getHour();
+    minute = gps.getMinute();
+    second = gps.getSecond();
+  }
+  Serial.print("latitude: "); Serial.println(latitude);
+  Serial.print("speed: "); Serial.println(gpsSpeed);
+
+}
+
+void updateUltrasonic() {
+  // Grab distance reading from ultrasonic sensor, SERIAL UART TX2/RX2
+  static unsigned long lastPing = 0;
+  if (millis() - lastPing >= 100) {
+    lastPing = millis();
+    ULTRASONIC_SERIAL.write(ULTRASONIC_COM);
+  }
+
+  static unsigned char buffer[4];
+  uint8_t CS;
+
+  while (ULTRASONIC_SERIAL.available() >= 4) {
+    if (ULTRASONIC_SERIAL.read() == 0xFF) {
+      buffer[0] = 0xFF;
+      for (int i = 1; i < 4; i++) buffer[i] = ULTRASONIC_SERIAL.read();
+      CS = buffer[0] + buffer[1] + buffer[2];
+      if (buffer[3] == CS) {
+        distance = ((buffer[1] << 8) + buffer[2]) / 1000.0;
+      }
+    }
+  }
+}
+
+void readTrinketPacket() {
+  //Reads data sent by trinket in module, SERIAL UART RX1
+  static enum { WAIT_START, READ_O2_H, READ_O2_L, READ_P_H, READ_P_L,
+                READ_T_H, READ_T_L, READ_D_H, READ_D_L, WAIT_END } state = WAIT_START;
+  static uint16_t o2_raw, pressure_raw, temp_raw, depth_raw;
+  static byte high;
+
+  while (TRINKET_SERIAL.available()) {
+    byte b = TRINKET_SERIAL.read();
+
+    switch (state) {
+      case WAIT_START: if (b == 0xAA) state = READ_O2_H; break;
+      case READ_O2_H: high = b; state = READ_O2_L; break;
+      case READ_O2_L: o2_raw = word(high, b); state = READ_P_H; break;
+      case READ_P_H: high = b; state = READ_P_L; break;
+      case READ_P_L: pressure_raw = word(high, b); state = READ_T_H; break;
+      case READ_T_H: high = b; state = READ_T_L; break;
+      case READ_T_L: temp_raw = word(high, b); state = READ_D_H; break;
+      case READ_D_H: high = b; state = READ_D_L; break;
+      case READ_D_L: depth_raw = word(high, b); state = WAIT_END; break;
+
+      case WAIT_END:
+        if (b == 0x55) {
+          float voltage = o2_raw * (vRef / 1023.0);
+          float T = calibTempC + 273.15;
+          float DO_sat = exp(-139.34411 + (1.575701e5 / T)
+            - (6.642308e7 / pow(T, 2)) + (1.243800e10 / pow(T, 3))
+            - (8.621949e11 / pow(T, 4)));
+          oxygen = (voltage - V0) * (DO_sat / (V100 - V0));
+          oxygen = max(oxygen, 0);
+
+          pressure = pressure_raw / 10.0;
+          temperature = temp_raw / 100.0;
+          depth = depth_raw / 100.0;
+        }
+        state = WAIT_START;
+        break;
+    }
+  }
+}
+
+void reelOperation() {
+  // Main function to operate reel, operates at full speed until 100 mm away from target, goes half speed until target is reached
+  if (depth < 0.1 && !waypointReached) {
+    analogWrite(motorPWMPin, 0);
+  } else if (waypointReached && !surfaceReached) {
+    digitalWrite(motorDirPin, HIGH);
+    analogWrite(motorPWMPin, depth < targetDepth - slowDownMargin ? fullSpeedPWM : slowSpeedPWM);
+  } else if (surfaceReached) {
+    digitalWrite(motorDirPin, LOW);
+    analogWrite(motorPWMPin, fullSpeedPWM);
+
+    if (depth < 0.1) {
+      analogWrite(motorPWMPin, 0);
+      surfaceReached = false;
+      moduleDeployed = false;
+    }
+  }
+}
+
+void logGPSData() {
+  // log latest gps data every second to SD card
+  gpsLogFile = SD.open("gps_log.txt", FILE_WRITE);
+  if (gpsLogFile) {
+    gpsLogFile.print("{\"latitude\":"); gpsLogFile.print(latitude, 8);
+    gpsLogFile.print(",\"longitude\":"); gpsLogFile.print(longitude, 8);
+    gpsLogFile.print(",\"altitude\":"); gpsLogFile.print(altitude, 3);
+    gpsLogFile.print(",\"fixType\":"); gpsLogFile.print(fixType);
+    gpsLogFile.print(",\"rtkStatus\":"); gpsLogFile.print(rtkStatus);
+    gpsLogFile.print(",\"speed\":"); gpsLogFile.print(gpsSpeed, 2);
+    gpsLogFile.print(",\"time\":\"");
+    if (hour < 10) gpsLogFile.print("0");
+    gpsLogFile.print(hour); gpsLogFile.print(":");
+    if (minute < 10) gpsLogFile.print("0");
+    gpsLogFile.print(minute); gpsLogFile.print(":");
+    if (second < 10) gpsLogFile.print("0");
+    gpsLogFile.print(second);
+    gpsLogFile.print("\",\"date\":\"");
+    if (month < 10) gpsLogFile.print("0");
+    gpsLogFile.print(month); gpsLogFile.print("-");
+    if (day < 10) gpsLogFile.print("0");
+    gpsLogFile.print(day); gpsLogFile.print("-");
+    gpsLogFile.print(year);
+    gpsLogFile.println("\"}");
+    //gpsLogFile.flush();
+    gpsLogFile.close();
+  }
+}
+
+void logSensorData() {
+  sensorLogFile = SD.open("sensor_log.txt", FILE_WRITE);
+  if (sensorLogFile) {
+    sensorLogFile.print("{\"depth\":"); sensorLogFile.print(depth, 2);
+    sensorLogFile.print(",\"distance\":"); sensorLogFile.print(distance, 2);
+    sensorLogFile.print(",\"temperature\":"); sensorLogFile.print(temperature, 2);
+    sensorLogFile.print(",\"oxygen\":"); sensorLogFile.print(oxygen, 2);
+    sensorLogFile.print(",\"latitude\":"); sensorLogFile.print(latitude, 8);
+    sensorLogFile.print(",\"longitude\":"); sensorLogFile.print(longitude, 8);
+    sensorLogFile.println("}");
+    //sensorLogFile.flush();
+    sensorLogFile.close();
+  }
+}
