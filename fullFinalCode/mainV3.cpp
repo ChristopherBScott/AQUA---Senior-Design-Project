@@ -161,6 +161,7 @@ void loop() {
     delay(1000);
   }
 
+  manualMotorOveride();
   gpsUpdate();
   updateUltrasonic();
   readTrinketPacket();
