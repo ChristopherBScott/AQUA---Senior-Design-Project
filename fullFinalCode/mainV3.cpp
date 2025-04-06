@@ -343,7 +343,7 @@ void logGPSData() {
 }
 
 void logSensorData() {
-  sensorLogFile = SD.open("sensor_log.json", FILE_WRITE);
+  sensorLogFile = SD.open("sensor_log.txt", FILE_WRITE);
   if (sensorLogFile) {
     sensorLogFile.print("{\"depth\":"); sensorLogFile.print(depth, 2);
     sensorLogFile.print(",\"distance\":"); sensorLogFile.print(distance, 2);
