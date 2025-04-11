@@ -194,7 +194,7 @@ void setup() {
 // ========== MAIN LOOP ========== //
 void loop() {
 
-  manualMotorOveride(); //Manual motor overide for when reel gets in a bad situation
+  //manualMotorOveride(); //Manual motor overide for when reel gets in a bad situation
   
       // get and log GPS data every second
       if ((millis() - lastGpsLog) >= 1000) {  //Log gps data every second
@@ -423,17 +423,17 @@ void logSensorData() {
 }
 
 
-void manualMotorOveride() 
-{
-  if (digitalRead(manualMotorPin0) == LOW) {
-    digitalWrite(motorDirPin, HIGH);
-    analogWrite(motorPWMPin, slowSpeedPWM);
-  }
-  else if (digitalRead(manualMotorPin1) == LOW) {
-    digitalWrite(motorDirPin, LOW);
-    analogWrite(motorPWMPin, slowSpeedPWM);
-  }
-  if (digitalRead(manualMotorPin0) == HIGH && digitalRead(manualMotorPin1) == HIGH) {
-    analogWrite(motorPWMPin, 0);
-  }
-}
+//void manualMotorOveride() 
+//{
+//  if (digitalRead(manualMotorPin0) == LOW) {
+//    digitalWrite(motorDirPin, HIGH);
+//    analogWrite(motorPWMPin, slowSpeedPWM);
+//  }
+//  else if (digitalRead(manualMotorPin1) == LOW) {
+//    digitalWrite(motorDirPin, LOW);
+//    analogWrite(motorPWMPin, slowSpeedPWM);
+//  }
+//  if (digitalRead(manualMotorPin0) == HIGH && digitalRead(manualMotorPin1) == HIGH) {
+//    analogWrite(motorPWMPin, 0);
+//  }
+//}
